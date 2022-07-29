@@ -346,7 +346,6 @@ export class Files {
       await Files.initiateSessionTG(req, files)
       await req.tg.connect()
     }
-
     return await Files.download(req, res, files)
   }
 
@@ -1057,12 +1056,10 @@ export class Files {
     }
 
     const totalFileSize = files.reduce((res, file) => res.add(file.size || 0), bigInt(0))
-
     if (!raw || Number(raw) === 0) {
       const { signed_key: _, ...result } = files[0]
       return res.send({ file: { ...result, password: result.password ? '[REDACTED]' : null } })
     }
-
     usage = await prisma.usages.update({
       data: {
         usage: bigInt(totalFileSize).add(bigInt(usage.usage)).toJSNumber()
@@ -1073,7 +1070,7 @@ export class Files {
       return res.send({ files })
     }
 
-    console.log(req.headers.range)
+    console.log('=>'+req.headers.range)
 
     let cancel = false
     req.on('close', () => cancel = true)
@@ -1102,7 +1099,7 @@ export class Files {
       if (ranges) {
         const start = ranges[0]
         const end = ranges[1] ? ranges[1] : totalFileSize.toJSNumber() - 1
-
+        console.log("i'm here")
         const readStream = createReadStream(filename(), { start, end })
         res.writeHead(206, {
           'Cache-Control': 'public, max-age=604800',
@@ -1131,15 +1128,29 @@ export class Files {
       }
       return
     }
-
-    // res.setHeader('Cache-Control', 'public, max-age=604800')
-    // res.setHeader('ETag', Buffer.from(`${files[0].id}:${files[0].message_id}`).toString('base64'))
-    res.setHeader('Content-Range', `bytes */${totalFileSize}`)
-    res.setHeader('Content-Disposition', contentDisposition(files[0].name.replace(/\.part\d+$/gi, ''), { type: Number(dl) === 1 ? 'attachment' : 'inline' }))
-    res.setHeader('Content-Type', files[0].mime_type)
-    res.setHeader('Content-Length', totalFileSize.toString())
-    res.setHeader('Accept-Ranges', 'bytes')
-
+    if(ranges){
+      let start = 0
+      let end = 0
+      if(ranges){
+        start = ranges[0]
+        end = start + 1000000
+      }
+      console.log("i'm here 2",  ranges ?? 'null')
+      res.setHeader('Cache-Control', 'public, max-age=604800')
+      res.setHeader('ETag', Buffer.from(`${files[0].id}:${files[0].message_id}`).toString('base64'))
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${totalFileSize}`)
+      res.setHeader('Content-Disposition', contentDisposition(files[0].name.replace(/\.part\d+$/gi, ''), { type: Number(dl) === 1 ? 'attachment' : 'inline' }))
+      res.setHeader('Content-Type', files[0].mime_type)
+      res.setHeader('Content-Length', totalFileSize.toString())
+      res.setHeader('Accept-Ranges', 'bytes')
+      // return res.status(206)
+    } else{
+      res.setHeader('Content-Range', `bytes */${totalFileSize}`)
+      res.setHeader('Content-Disposition', contentDisposition(files[0].name.replace(/\.part\d+$/gi, ''), { type: Number(dl) === 1 ? 'attachment' : 'inline' }))
+      res.setHeader('Content-Type', files[0].mime_type)
+      res.setHeader('Content-Length', totalFileSize.toString())
+      res.setHeader('Accept-Ranges', 'bytes')
+    }
     let downloaded: number = 0
     try {
       writeFileSync(filename('process-'), '')
